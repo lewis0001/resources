@@ -1,0 +1,23 @@
+{
+  "name": "banjo_wall",
+  "description": "Round banjo/drum heads on metal arms against a sage-green wall; a tinted glass marble bounces between them.",
+  "style": {
+    "instrument": "drum",
+    "background": "#a9bda4",
+    "background_grid": null,
+    "bracket_color": "#c3c8cc",
+    "peg_color": "#c3c8cc",
+    "ball_color": "#9fc4e0",
+    "ball_radius_m": 0.05,
+    "wood_color": "#8a5a3b",
+    "head_color": "#f2efe8",
+    "wobble_deg": 7.0,
+    "wobble_decay_s": 0.34
+  },
+  "audio": { "bank": "banjo" },
+  "solver": {
+    "target_drop_per_hit": 0.28,
+    "instrument_clearance": 0.24
+  },
+  "palette": "boomwhacker"
+}

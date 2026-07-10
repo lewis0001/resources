@@ -125,11 +125,18 @@ library and upload the video muted, or stick to public-domain/licensed music.
 
 ## Themes
 
-Two themes ship, sharing the same solver:
+Three themes ship, sharing the same solver:
 
 * `boomwhacker_wall` — coloured tubes on thin metal brackets against a tiled
   wall (glissando-friendly).
 * `floating_paddles` — kalimba-like paddles on thin posts in a bright void.
+* `banjo_wall` — round wooden banjo/drum heads on metal arms against a
+  sage-green wall, struck by a tinted glass marble.
+
+In the Blender engine every instrument gets a seeded 3D tilt of its own, so
+the wall reads as hand-placed objects with real depth (plus soft area
+shadows, clearcoat plastic/wood materials, DOF, and a vignette + saturation
+grade at encode time).
 
 A theme is a JSON file in `themes/`: instrument shape, colours, wobble
 animation parameters, background, plus optional `solver`/`audio` overrides.

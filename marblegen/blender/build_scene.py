@@ -61,7 +61,7 @@ def set_input(bsdf, names, value):
 
 
 def make_material(name, rgb, roughness=0.35, metallic=0.0, transmission=0.0,
-                  ior=1.45):
+                  ior=1.45, clearcoat=0.0):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
@@ -70,7 +70,18 @@ def make_material(name, rgb, roughness=0.35, metallic=0.0, transmission=0.0,
     bsdf.inputs["Metallic"].default_value = metallic
     set_input(bsdf, ("Transmission Weight", "Transmission"), transmission)
     set_input(bsdf, ("IOR",), ior)
+    if clearcoat:
+        set_input(bsdf, ("Coat Weight", "Clearcoat"), clearcoat)
+        set_input(bsdf, ("Coat Roughness", "Clearcoat Roughness"), 0.08)
     return mat
+
+
+def _hash01(*ints):
+    """Deterministic pseudo-random in [0,1) from integers (no RNG state)."""
+    h = 2166136261
+    for v in ints:
+        h = (h ^ (int(v) & 0xFFFFFFFF)) * 16777619 & 0xFFFFFFFF
+    return (h % 100000) / 100000.0
 
 
 def look_of(style, key, default):
@@ -81,6 +92,13 @@ def look_of(style, key, default):
 def shade_smooth(obj):
     for poly in obj.data.polygons:
         poly.use_smooth = True
+
+
+def shade_smooth_sides(obj):
+    """Smooth only the side faces of a cylinder — flat caps stay flat, so
+    drum heads and tube mouths don't render as inflated domes."""
+    for poly in obj.data.polygons:
+        poly.use_smooth = abs(poly.normal.z) < 0.5
 
 
 def main():
@@ -183,20 +201,23 @@ def main():
     wall.data.materials.append(mat)
 
     # ---- lights ------------------------------------------------------------
+    # soft studio: a gentle directional key for shape + a big area wash. The
+    # sun angle sets shadow softness (the reference look has large, soft,
+    # down-left shadows).
     sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
-    sun.data.energy = 0.9
-    sun.data.angle = math.radians(5)
-    sun.rotation_euler = Euler((math.radians(60), math.radians(-18), 0))
+    sun.data.energy = 1.0
+    sun.data.angle = math.radians(9)
+    sun.rotation_euler = Euler((math.radians(56), math.radians(-22), 0))
     scn.collection.objects.link(sun)
     key = bpy.data.objects.new("key", bpy.data.lights.new("key", "AREA"))
-    key.data.energy = 260.0
-    key.data.size = 8.0
-    key.location = (1.2, -3.8, (y_top + y_bot) / 2 + 1.5)
+    key.data.energy = 300.0
+    key.data.size = 12.0
+    key.location = (1.4, -4.2, (y_top + y_bot) / 2 + 1.5)
     key.rotation_euler = Euler((math.pi / 2, 0, math.radians(16)))
     scn.collection.objects.link(key)
 
     # ---- instruments --------------------------------------------------------
-    is_tube = style.get("instrument", "tube") == "tube"
+    instr_kind = style.get("instrument", "tube")
     tube_r = float(style.get("tube_radius_m", 0.03))
     pad_t = float(style.get("paddle_thickness_m", 0.028))
     bracket_mat = make_material("bracket",
@@ -204,17 +225,29 @@ def main():
                                 roughness=0.25, metallic=0.9)
     peg_mat = make_material("peg", look_of(style, "peg_color", "#b9bec4"),
                             roughness=0.35, metallic=0.7)
+    wood_mat = make_material("wood", look_of(style, "wood_color", "#8a5a3b"),
+                             roughness=0.5, clearcoat=0.3)
+    head_mat = make_material("head", look_of(style, "head_color", "#f2efe8"),
+                             roughness=0.25, clearcoat=0.5)
     wobble_deg = float(style.get("wobble_deg", 10.0))
     wobble_decay = float(style.get("wobble_decay_s", 0.3))
 
     def add_bracket(x, z, depth=0.10):
+        """Metal rod anchored in the wall (y=0.09), reaching toward the
+        instrument, with a ball joint on its free end."""
         bpy.ops.mesh.primitive_cylinder_add(radius=0.006, depth=depth,
                                             vertices=12)
         b = bpy.context.object
         b.rotation_euler = Euler((math.pi / 2, 0, 0))
-        b.location = (x, depth / 2 + 0.0, z)
+        b.location = (x, 0.088 - depth / 2, z)
         b.data.materials.append(bracket_mat)
         shade_smooth(b)
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.011, segments=16,
+                                             ring_count=8)
+        joint = bpy.context.object
+        joint.location = (x, 0.088 - depth, z)
+        joint.data.materials.append(bracket_mat)
+        shade_smooth(joint)
         return b
 
     def keyframe_wobble(obj, hit_frames, axis_index):
@@ -254,14 +287,19 @@ def main():
 
         rgb = vis["color"] if vis else (0.8, 0.2, 0.2)
         length = vis["length"] if vis else 0.2
-        mat = make_material(f"instr_{i}", rgb, roughness=0.28)
         is_roll = evd["mode"] == "roll"
+        # per-instrument variation makes the wall read as hand-placed 3D
+        # objects instead of a flat pattern
+        var_a = _hash01(i, 11)
+        var_b = _hash01(i, 29)
 
-        if is_tube:
+        if instr_kind == "tube":
+            mat = make_material(f"instr_{i}", rgb,
+                                roughness=0.24 + 0.10 * var_b, clearcoat=0.6)
             bpy.ops.mesh.primitive_cylinder_add(radius=tube_r, depth=length,
                                                 vertices=32)
             obj = bpy.context.object
-            shade_smooth(obj)
+            shade_smooth_sides(obj)
             bev = obj.modifiers.new("bevel", "BEVEL")
             bev.width = 0.004
             bev.segments = 2
@@ -276,16 +314,55 @@ def main():
                 wob_axis = 1
             else:
                 # lie in the wall plane, perpendicular to the contact normal,
-                # tilted out of the wall so the mouth faces the camera a bit
+                # tilted out of the wall so the mouth faces the camera; each
+                # tube gets its own tilt so the wall has depth variety
                 ang = math.atan2(-nx, ny)     # axis = perp(normal)
-                out_tilt = math.radians(24)
+                out_tilt = math.radians(14 + 22 * var_a)
                 obj.rotation_euler = Euler((out_tilt, ang + math.pi / 2, 0),
                                            "ZYX")
                 obj.location = (x - nx * tube_r, length / 2 *
                                 math.sin(out_tilt) * 0.4, y - ny * tube_r)
-                add_bracket(x - nx * tube_r, y - ny * tube_r - 0.02)
+                add_bracket(x - nx * tube_r, y - ny * tube_r - 0.02,
+                            depth=0.08)
                 wob_axis = 0
-        else:
+            obj.data.materials.append(mat)
+        elif instr_kind == "drum":
+            # round drum/banjo head on a metal arm: wood body + bright skin,
+            # tilted out of the wall by a per-instrument amount
+            radius = max(0.055, length * 0.42)
+            # tilt azimuth wanders around the contact normal so heads face
+            # left/right/up with hand-placed variety, like the reference
+            ang = math.atan2(ny, nx) + (var_b - 0.5) * 1.3
+            out_tilt = math.radians(16 + 26 * var_a)
+            # after this rotation the drum's local +Z cap faces the camera,
+            # nodding `out_tilt` upward, twisted so the tilt follows the
+            # contact normal direction
+            rot = Euler((math.pi / 2 - out_tilt, 0, ang - math.pi / 2), "ZYX")
+            bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=0.045,
+                                                vertices=40)
+            obj = bpy.context.object
+            shade_smooth_sides(obj)
+            bev = obj.modifiers.new("bevel", "BEVEL")
+            bev.width = 0.006
+            bev.segments = 2
+            obj.rotation_euler = rot
+            obj.location = (x - nx * radius * 0.9, 0.02, y - ny * radius * 0.9)
+            obj.data.materials.append(wood_mat)
+            # drum skin: thin bright disc sitting proud of the front cap,
+            # placed in the body's local space so wobble carries it along
+            bpy.ops.mesh.primitive_cylinder_add(radius=radius * 0.85,
+                                                depth=0.012, vertices=40)
+            head = bpy.context.object
+            shade_smooth_sides(head)
+            head.parent = obj
+            head.location = (0.0, 0.0, 0.026)
+            head.rotation_euler = Euler((0, 0, 0))
+            head.data.materials.append(head_mat)
+            add_bracket(x - nx * radius, y - ny * radius, depth=0.075)
+            wob_axis = 0
+        else:  # paddle
+            mat = make_material(f"instr_{i}", rgb,
+                                roughness=0.26 + 0.08 * var_b, clearcoat=0.5)
             bpy.ops.mesh.primitive_cube_add(size=1)
             obj = bpy.context.object
             obj.scale = (length, 2.4 * pad_t, pad_t)
@@ -293,18 +370,20 @@ def main():
             bev.width = 0.008
             bev.segments = 3
             ang = math.atan2(ny, nx)
-            obj.rotation_euler = Euler((0, 0, ang - math.pi / 2))
+            roll_var = math.radians((var_a - 0.5) * 14)
+            obj.rotation_euler = Euler((roll_var, 0, ang - math.pi / 2), "ZYX")
             obj.location = (x - nx * pad_t / 2, 0, y - ny * pad_t / 2)
             add_bracket(x - nx * 0.04, y - ny * 0.04, depth=0.14)
+            obj.data.materials.append(mat)
             wob_axis = 1
-        obj.data.materials.append(mat)
         keyframe_wobble(obj, [hit_frame], wob_axis)
 
     # ---- marbles -------------------------------------------------------------
     ball_r = float(style.get("ball_radius_m", 0.04))
     # alpha-blended glass: reads as transparent without needing raytraced
     # transmission (which software-GL Eevee can't do)
-    glass = make_material("marble", (0.70, 0.77, 0.88), roughness=0.04)
+    tint = look_of(style, "ball_color", "#b3c4de")
+    glass = make_material("marble", tint, roughness=0.04, clearcoat=0.8)
     gb = glass.node_tree.nodes["Principled BSDF"]
     set_input(gb, ("Alpha",), 0.55)
     for attr, val in (("surface_render_method", "BLENDED"),
@@ -363,7 +442,10 @@ def main():
     cam_data = bpy.data.cameras.new("cam")
     cam_data.lens = 60                      # long-ish lens, flat perspective
     cam_data.sensor_fit = "HORIZONTAL"      # sensor_width maps to res_x even
-    cam = bpy.data.objects.new("cam", cam_data)   # in portrait orientation
+    if hasattr(cam_data, "dof"):            # in portrait orientation
+        cam_data.dof.use_dof = True         # subtle depth falloff on tilted
+        cam_data.dof.aperture_fstop = 2.8   # instruments sells the 3D
+    cam = bpy.data.objects.new("cam", cam_data)
     scn.collection.objects.link(cam)
     scn.camera = cam
     cam.rotation_euler = Euler((math.pi / 2, 0, 0))   # look toward +Y
@@ -372,6 +454,8 @@ def main():
     # distance so the horizontal extent equals view_w:
     # d = view_w * focal / sensor_width (sensor units in mm)
     dist = view_w * cam_data.lens / cam_data.sensor_width
+    if hasattr(cam_data, "dof"):
+        cam_data.dof.focus_distance = dist
     for f in range(1, n_frames + 1):
         cx, cy = cam_pos[min(f - 1, len(cam_pos) - 1)]
         cam.location = (cx, -dist, cy)

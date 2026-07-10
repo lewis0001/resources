@@ -1,0 +1,11 @@
+{
+  "name": "banjo",
+  "description": "Plucked banjo string over a drum head - twangy, punchy pluck",
+  "synth": {
+    "partials": [[1.0, 1.0, 1.0], [2.0, 0.62, 0.55], [3.01, 0.38, 0.35],
+                 [4.2, 0.22, 0.22], [5.4, 0.12, 0.14], [7.1, 0.06, 0.09]],
+    "decay_s": 0.62, "attack_ms": 0.8, "inharmonic": 0.15,
+    "strike_noise": 0.45, "strike_tone_hz": 3800,
+    "note_dur_s": 1.8
+  }
+}

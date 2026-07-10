@@ -84,6 +84,39 @@ class _Instrument:
         base = pitch_color(pitch, palette)
         L = instrument_length(pitch) + 0.05 * (len(ev.pitches) - 1)
 
+        if theme_style.get("instrument") == "drum":
+            wood = theme_style.get("wood_color", "#8a5a3b")
+            wood_rgb = tuple(int(wood.lstrip("#")[i:i + 2], 16) / 255
+                             for i in (0, 2, 4))
+            head_col = theme_style.get("head_color", "#f2efe8")
+            R = max(0.055, L * 0.42)
+            c = p - n * R
+            self._local = []
+            for grow, alpha in ((1.7, 0.08), (1.2, 0.11)):
+                sh = Ellipse((c[0] + 0.035, c[1] - 0.05), 2 * R * grow,
+                             2 * R * grow * 0.8, fc=(0, 0, 0, alpha),
+                             ec="none", zorder=2)
+                add(sh, wobbles=False)
+            arm0 = c - n * R * 0.4
+            arm, = ax.plot([arm0[0], arm0[0] + 0.03], [arm0[1], arm0[1] - 0.09],
+                           color=theme_style.get("bracket_color", "#c3c8cc"),
+                           lw=2.6, solid_capstyle="round", zorder=3)
+            self.static_patches.append(arm)
+            body = Circle(tuple(c), R, fc=wood_rgb, ec=(0, 0, 0, 0.25),
+                          lw=1.0, zorder=4)
+            rim = Circle(tuple(c), R * 0.90, fc="none",
+                         ec=(*_shade(wood_rgb, 0.6), 0.9), lw=1.6, zorder=5)
+            headp = Circle(tuple(c), R * 0.80, fc=head_col,
+                           ec=(0, 0, 0, 0.12), lw=0.6, zorder=6)
+            gloss = Circle((c[0] - R * 0.22, c[1] + R * 0.25), R * 0.42,
+                           fc=(1, 1, 1, 0.35), ec="none", zorder=7)
+            for patch in (body, rim, headp, gloss):
+                self._local.append((patch, 0.0, (0.0, 0.0)))
+                add(patch, wobbles=True)
+            self.anchor, self.base_angle = tuple(p), 0.0
+            self._apply(0.0)
+            return
+
         if is_tube:
             if is_roll_note:
                 axis = -n                       # hang below the rolling line
@@ -224,16 +257,22 @@ class _Marble:
     shadow and a motion trail."""
 
     def __init__(self, ax, track: int, radius: float, path: np.ndarray,
-                 start_t: float, video_t0: float, fps: int):
+                 start_t: float, video_t0: float, fps: int,
+                 tint: str | None = None):
         self.r = radius
         self.path = path
         self.start_frame = max(0, int((start_t - video_t0) * fps) - int(0.1 * fps))
         d = np.diff(path, axis=0)
         self.dist = np.concatenate([[0.0], np.cumsum(np.linalg.norm(d, axis=1))])
         r = radius
+        if tint:
+            trgb = tuple(int(tint.lstrip("#")[i:i + 2], 16) / 255
+                         for i in (0, 2, 4))
+        else:
+            trgb = (1.0, 1.0, 1.0)
         self.shadow = Ellipse((0, 0), 2.6 * r, 1.5 * r, fc=(0, 0, 0, 0.12),
                               ec="none", zorder=9)
-        self.glass = Circle((0, 0), r, fc=(1, 1, 1, 0.44),
+        self.glass = Circle((0, 0), r, fc=(*trgb, 0.48),
                             ec=(0.25, 0.28, 0.33, 0.55), lw=1.4, zorder=11)
         self.rimlight = Circle((0, 0), r * 0.86, fc="none",
                                ec=(1, 1, 1, 0.55), lw=1.6, zorder=12)
@@ -363,7 +402,8 @@ def render_preview(traj: Trajectory, theme: dict, cfg: dict,
     # --- marbles ------------------------------------------------------------------
     ball_r = float(style.get("ball_radius_m", 0.032))
     marbles = [_Marble(ax, tr, ball_r, ball_paths[tr],
-                       traj.track_start(tr), video_t0, fps)
+                       traj.track_start(tr), video_t0, fps,
+                       tint=style.get("ball_color"))
                for tr in tracks]
 
     # --- vignette -------------------------------------------------------------------

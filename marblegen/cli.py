@@ -164,9 +164,12 @@ def _run_blender(traj, cfg, theme, tmpdir: Path, out_mp4: Path,
             raise SystemExit("Blender produced neither a video nor frames")
         from marblegen.ffmpeg import ffmpeg_exe
         fps = int(cfg["render"]["fps"])
+        # grade at encode time: gentle vignette + a touch of saturation —
+        # free polish that would cost compositor time inside Blender
         subprocess.run([ffmpeg_exe(), "-y", "-loglevel", "error",
                         "-framerate", str(fps),
                         "-i", str(frames_dir / "%04d.png"),
+                        "-vf", "vignette=angle=PI/24,eq=saturation=1.07",
                         "-c:v", "libx264", "-pix_fmt", "yuv420p",
                         "-crf", "19", "-preset", "medium",
                         str(out_mp4)], check=True)
@@ -242,7 +245,8 @@ def _job_namespace(job: dict, args) -> argparse.Namespace:
 def cmd_validate(args):
     from marblegen.notes import songs_dir
     themes = [args.theme] if args.theme else ["boomwhacker_wall",
-                                              "floating_paddles"]
+                                              "floating_paddles",
+                                              "banjo_wall"]
     song_stems = [args.song] if args.song else \
         sorted(p.stem for p in songs_dir().glob("*.mid"))
     n_fail = 0

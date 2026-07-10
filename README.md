@@ -22,9 +22,19 @@ pip install -e .          # installs numpy, matplotlib, mido, imageio-ffmpeg
 
 That is everything the default pipeline needs — `imageio-ffmpeg` ships an
 ffmpeg binary, and the built-in **preview engine** renders real videos with
-matplotlib. For the fancier 3D look, install [Blender](https://www.blender.org)
-(3.6+ or 4.x) and render with `--engine blender` (set `$BLENDER` if it is not
-on your PATH).
+matplotlib (pseudo-3D: shaded tubes with visible mouths, soft wall shadows,
+glass marbles, embossed tiles). For the fully 3D look, render with
+`--engine blender` after either:
+
+* installing [Blender](https://www.blender.org) 3.6+/4.x/5.x (set `$BLENDER`
+  if it is not on your PATH), **or**
+* `pip install bpy` (Blender as a Python module — works headless; on servers
+  without a GPU install Mesa's software GL: `apt install libegl1 libgl1-mesa-dri`).
+
+On a machine with a GPU, Eevee renders these scenes at a few frames per
+second; on CPU-only software GL expect seconds per frame, so use
+`--scale 0.5` or the `--still N` look-dev flag in
+`marblegen/blender/build_scene.py` while iterating.
 
 ```bash
 marblegen songs      # list the 27 bundled public-domain songs
@@ -66,6 +76,13 @@ construction**, not by cleanup:
     ramp keeps the tangential velocity component and absorbs the normal one —
     the physics of a real landing.
   * *Chords* → one wide instrument struck once, sounding every pitch.
+  * *Dense songs* → **multiple marbles** (`--marbles auto`, the default):
+    the hit stream is dealt across 2–3 marbles, each solved on its own
+    horizontal lane with shared clearance, so every track is a calm,
+    readable bounce pattern while together they play the whole song. Each
+    marble carries differently-coloured beads so viewers can follow it, and
+    the camera frames the group. `--marbles 1` forces the classic single
+    ball; `--marbles 3` forces a trio.
 * **Automatic validation** (`marblegen validate`) samples the final
   closed-form trajectory and fails loudly if acceleration ever deviates from
   gravity, any bounce gains energy, any velocity change has no contact event
@@ -121,12 +138,16 @@ Copy one, tweak it, and pass `--theme mytheme`.
 ## Rendering engines
 
 * `--engine preview` (default): matplotlib → H.264. Real output, fast, zero
-  extra dependencies. `marblegen preview` is the same engine at half
-  resolution for iteration.
+  extra dependencies, pseudo-3D styling. `marblegen preview` is the same
+  engine at half resolution for iteration.
 * `--engine blender`: exports the solved trajectory and drives
-  `marblegen/blender/build_scene.py` inside headless Blender (Eevee) — 3D
-  tubes/paddles, tiled wall, soft studio lighting, motion blur, per-hit
-  wobble keyframes. The CLI muxes the audio either way.
+  `marblegen/blender/build_scene.py` inside Blender (Eevee) — true 3D
+  tubes/paddles with cylindrical shading, tiled wall, soft studio lighting,
+  glass marbles with beads, per-hit wobble keyframes. Works with a Blender
+  install or the `bpy` pip module; when `bpy` lacks ffmpeg output the script
+  renders a PNG sequence and the CLI encodes it. The CLI muxes the audio
+  either way. If your audio seems missing, check the player first — many
+  in-app video previews start muted; files carry a −1 dB-peak AAC track.
 
 Camera work is computed once and shared by both engines: a critically damped
 spring follows the ball (no jitter), keeping it in the upper third of frame.

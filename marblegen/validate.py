@@ -31,9 +31,93 @@ def validate(traj: Trajectory, hits: list[Hit], cfg_solver: dict) -> dict:
     roll_k = float(cfg_solver["roll_accel_factor"])
     x_lo, x_hi = cfg_solver["x_bounds"]
 
-    segs = traj.segments
     events = traj.events
 
+    for track in traj.tracks():
+        segs = traj.segments_of(track)
+        tr_events = [e for e in events if e.track == track]
+        _check_track(track, segs, tr_events, errors, warnings, g, e_nom,
+                     e_min, roll_k)
+
+    # --- marbles must stay close enough vertically for one camera ----------
+    if len(traj.tracks()) > 1:
+        t0, t1 = traj.time_range()
+        ts = np.linspace(t0, t1, 120)
+        spread = max(float(np.ptp([traj.pos_at(t, tr)[1]
+                                   for tr in traj.tracks()]))
+                     for t in ts)
+        if spread > 1.9:
+            warnings.append(f"marble tracks drift {spread:.2f} m apart "
+                            f"vertically — camera may not frame all of them")
+
+    # --- 3. every MIDI hit has an exactly-timed strike ----------------------
+    note_times = sorted(e.time for e in events if e.kind == "note")
+    for h in hits:
+        if not any(abs(t - h.time) <= 0.005 for t in note_times):
+            errors.append(f"note at t={h.time:.3f} has no strike within 5 ms")
+    n_extra = len(note_times) - len(hits)
+    if n_extra != 0:
+        errors.append(f"strike count mismatch: {len(note_times)} strikes for "
+                      f"{len(hits)} hits")
+
+    # --- 4. bounds -----------------------------------------------------------
+    for e in events:
+        if e.kind == "spawn":
+            continue
+        if e.pos[0] < x_lo - 0.10 or e.pos[0] > x_hi + 0.10:
+            errors.append(f"{e.kind} at t={e.time:.3f}: x={e.pos[0]:.2f} "
+                          f"outside play area")
+        elif e.pos[0] < x_lo - 0.005 or e.pos[0] > x_hi + 0.005:
+            warnings.append(f"{e.kind} at t={e.time:.3f}: x={e.pos[0]:.2f} "
+                            f"grazes play-area edge")
+
+    # --- 5. interpenetration (across ALL tracks) -------------------------------
+    placed = [(np.array(e.pos), e.mode, e.time) for e in events
+              if e.kind in ("note", "peg")]
+    min_sp = float(cfg_solver["ramp_min_spacing"])
+    instr_cl = float(cfg_solver["instrument_clearance"])
+    worst = None
+    for i in range(len(placed)):
+        for j in range(i + 1, len(placed)):
+            (pa, ma, ta), (pb, mb, tb) = placed[i], placed[j]
+            if abs(pa[1] - pb[1]) > 0.6:
+                continue
+            need = instr_cl if (ma == "bounce" and mb == "bounce") else \
+                0.98 * min_sp
+            d = float(np.linalg.norm(pa - pb))
+            if d < 0.6 * need:
+                errors.append(f"instruments at t={ta:.2f} and t={tb:.2f} "
+                              f"interpenetrate ({d * 100:.1f} cm apart)")
+            elif d < need and (worst is None or d < worst):
+                worst = d
+                warnings.append(f"instruments at t={ta:.2f}/{tb:.2f} are close "
+                                f"({d * 100:.1f} cm)")
+
+    # --- 6. stats --------------------------------------------------------------
+    all_segs = traj.segments
+    speeds = [float(np.linalg.norm(e.v_in)) for e in events
+              if e.kind in ("note", "peg", "reversal")]
+    y0 = max(s.pos(s.t0)[1] for s in all_segs)
+    y1 = min(s.pos(s.t1)[1] for s in all_segs)
+    stats = {
+        "marbles": len(traj.tracks()),
+        "notes": sum(1 for e in events if e.kind == "note"),
+        "pegs": sum(1 for e in events if e.kind == "peg"),
+        "reversals": sum(1 for e in events if e.kind == "reversal"),
+        "duration_s": round(traj.time_range()[1] - traj.time_range()[0], 2),
+        "descent_m": round(float(y0 - y1), 2),
+        "speed_min": round(min(speeds), 2) if speeds else None,
+        "speed_max": round(max(speeds), 2) if speeds else None,
+    }
+    if speeds and max(speeds) > float(cfg_solver["max_speed"]) * 1.05:
+        warnings.append(f"peak speed {max(speeds):.1f} m/s above configured cap")
+
+    return {"ok": not errors, "errors": errors, "warnings": warnings,
+            "stats": stats}
+
+
+def _check_track(track: int, segs, events, errors, warnings, g, e_nom, e_min,
+                 roll_k) -> None:
     # --- 1. physics inside every segment (finite differences vs closed form)
     for si, s in enumerate(segs):
         dur = s.t1 - s.t0
@@ -106,74 +190,13 @@ def validate(traj: Trajectory, hits: list[Hit], cfg_solver: dict) -> dict:
                 errors.append(f"landing at t={ev.time:.3f}: energy gained "
                               f"({s_out:.3f} > {s_in:.3f} m/s)")
 
-    # --- 3. every MIDI hit has an exactly-timed strike ----------------------
-    note_times = sorted(e.time for e in events if e.kind == "note")
-    for h in hits:
-        if not any(abs(t - h.time) <= 0.005 for t in note_times):
-            errors.append(f"note at t={h.time:.3f} has no strike within 5 ms")
-    n_extra = len(note_times) - len(hits)
-    if n_extra != 0:
-        errors.append(f"strike count mismatch: {len(note_times)} strikes for "
-                      f"{len(hits)} hits")
-
-    # --- 4. bounds -----------------------------------------------------------
-    for e in events:
-        if e.kind == "spawn":
-            continue
-        if e.pos[0] < x_lo - 0.10 or e.pos[0] > x_hi + 0.10:
-            errors.append(f"{e.kind} at t={e.time:.3f}: x={e.pos[0]:.2f} "
-                          f"outside play area")
-        elif e.pos[0] < x_lo - 0.005 or e.pos[0] > x_hi + 0.005:
-            warnings.append(f"{e.kind} at t={e.time:.3f}: x={e.pos[0]:.2f} "
-                            f"grazes play-area edge")
-
-    # --- 5. interpenetration --------------------------------------------------
-    placed = [(np.array(e.pos), e.mode, e.time) for e in events
-              if e.kind in ("note", "peg")]
-    min_sp = float(cfg_solver["ramp_min_spacing"])
-    instr_cl = float(cfg_solver["instrument_clearance"])
-    worst = None
-    for i in range(len(placed)):
-        for j in range(i + 1, len(placed)):
-            (pa, ma, ta), (pb, mb, tb) = placed[i], placed[j]
-            if abs(pa[1] - pb[1]) > 0.6:
-                continue
-            need = instr_cl if (ma == "bounce" and mb == "bounce") else \
-                0.98 * min_sp
-            d = float(np.linalg.norm(pa - pb))
-            if d < 0.6 * need:
-                errors.append(f"instruments at t={ta:.2f} and t={tb:.2f} "
-                              f"interpenetrate ({d * 100:.1f} cm apart)")
-            elif d < need and (worst is None or d < worst):
-                worst = d
-                warnings.append(f"instruments at t={ta:.2f}/{tb:.2f} are close "
-                                f"({d * 100:.1f} cm)")
-
-    # --- 6. stats --------------------------------------------------------------
-    speeds = [float(np.linalg.norm(e.v_in)) for e in events
-              if e.kind in ("note", "peg", "reversal")]
-    stats = {
-        "notes": sum(1 for e in events if e.kind == "note"),
-        "pegs": sum(1 for e in events if e.kind == "peg"),
-        "reversals": sum(1 for e in events if e.kind == "reversal"),
-        "duration_s": round(segs[-1].t1 - segs[0].t0, 2),
-        "descent_m": round(float(segs[0].pos(segs[0].t0)[1] -
-                                 segs[-1].pos(segs[-1].t1)[1]), 2),
-        "speed_min": round(min(speeds), 2) if speeds else None,
-        "speed_max": round(max(speeds), 2) if speeds else None,
-    }
-    if speeds and max(speeds) > float(cfg_solver["max_speed"]) * 1.05:
-        warnings.append(f"peak speed {max(speeds):.1f} m/s above configured cap")
-
-    return {"ok": not errors, "errors": errors, "warnings": warnings,
-            "stats": stats}
-
 
 def format_report(name: str, report: dict) -> str:
     s = report["stats"]
     lines = [f"— solver report: {name} "
              f"[{'PASS' if report['ok'] else 'FAIL'}]",
-             f"  notes={s['notes']} pegs={s['pegs']} reversals={s['reversals']} "
+             f"  marbles={s.get('marbles', 1)} notes={s['notes']} "
+             f"pegs={s['pegs']} reversals={s['reversals']} "
              f"duration={s['duration_s']}s descent={s['descent_m']}m "
              f"impact speeds {s['speed_min']}–{s['speed_max']} m/s"]
     for e in report["errors"]:

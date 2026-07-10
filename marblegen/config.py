@@ -43,7 +43,7 @@ DEFAULTS: dict = {
         "seed": 7,
     },
     "audio": {
-        "sample_rate": 44100,
+        "sample_rate": 48000,
         "bank": "boomwhacker",
         "master_gain_db": -1.0,
         "pan_spread": 0.6,          # how strongly instrument x position pans audio

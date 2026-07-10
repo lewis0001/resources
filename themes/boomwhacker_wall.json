@@ -9,12 +9,19 @@
     "bracket_color": "#9aa0a6",
     "peg_color": "#b9bec4",
     "ball_color": "#dfe8f0",
-    "ball_radius_m": 0.032,
-    "tube_radius_m": 0.030,
+    "ball_radius_m": 0.042,
+    "tube_radius_m": 0.03,
     "wobble_deg": 9.0,
-    "wobble_decay_s": 0.30
+    "wobble_decay_s": 0.3
   },
-  "audio": { "bank": "boomwhacker" },
-  "solver": { "ramp_angle_deg": [14.0, 40.0] },
+  "audio": {
+    "bank": "boomwhacker"
+  },
+  "solver": {
+    "ramp_angle_deg": [
+      14.0,
+      40.0
+    ]
+  },
   "palette": "boomwhacker"
 }

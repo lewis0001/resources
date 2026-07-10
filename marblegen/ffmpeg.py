@@ -26,7 +26,8 @@ def mux(video: str | Path, audio_wav: str | Path, out: str | Path) -> Path:
     cmd = [ffmpeg_exe(), "-y", "-loglevel", "error",
            "-i", str(video), "-i", str(audio_wav),
            "-map", "0:v:0", "-map", "1:a:0",
-           "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+           "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+           "-movflags", "+faststart",
            "-shortest", str(out)]
     subprocess.run(cmd, check=True)
     return out

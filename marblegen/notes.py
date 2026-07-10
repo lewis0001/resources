@@ -192,6 +192,40 @@ def to_hits(song: Song, chord_epsilon: float = 0.012) -> list[Hit]:
 
 
 # ---------------------------------------------------------------------------
+# Multi-marble voice splitting
+# ---------------------------------------------------------------------------
+
+def auto_marbles(hits: list[Hit], max_marbles: int = 3) -> int:
+    """Pick a marble count from note density: busy songs read as chaos with a
+    single marble, so dense passages get split across 2-3 marbles."""
+    if len(hits) < 8:
+        return 1
+    gaps = sorted(hits[i + 1].time - hits[i].time for i in range(len(hits) - 1))
+    median_gap = gaps[len(gaps) // 2]
+    if median_gap >= 0.22:
+        return 1
+    if median_gap >= 0.11:
+        return min(2, max_marbles)
+    return min(3, max_marbles)
+
+
+def split_voices(hits: list[Hit], n_marbles: int) -> list[list[Hit]]:
+    """Deal the hit stream across n marbles: each hit goes to the marble that
+    has rested longest (strict alternation for a monophonic line). Every
+    marble's own note gaps become ~n times longer, so each track stays a calm,
+    readable bounce pattern while together they play the full song."""
+    if n_marbles <= 1:
+        return [hits]
+    last = [float("-inf")] * n_marbles
+    voices: list[list[Hit]] = [[] for _ in range(n_marbles)]
+    for h in hits:
+        i = min(range(n_marbles), key=lambda k: last[k])
+        voices[i].append(h)
+        last[i] = h.time
+    return [v for v in voices if v]
+
+
+# ---------------------------------------------------------------------------
 # Song library
 # ---------------------------------------------------------------------------
 

@@ -20,7 +20,8 @@ import tempfile
 from pathlib import Path
 
 from marblegen.config import REPO_ROOT, build_config, load_theme
-from marblegen.notes import load_midi, resolve_song, to_hits, transform
+from marblegen.notes import (auto_marbles, load_midi, resolve_song,
+                             split_voices, to_hits, transform)
 from marblegen.solver import solve
 from marblegen.validate import format_report, validate
 
@@ -67,7 +68,13 @@ def _prepare(args):
                      trim=_parse_trim(args.trim), loop=args.loop)
     hits = to_hits(song, cfg["solver"]["chord_epsilon"])
 
-    traj = solve(hits, cfg["solver"],
+    marbles_arg = getattr(args, "marbles", None) or \
+        manifest.get("marbles", "auto")
+    n_marbles = auto_marbles(hits) if str(marbles_arg) == "auto" \
+        else max(1, int(marbles_arg))
+    voices = split_voices(hits, n_marbles)
+
+    traj = solve(voices, cfg["solver"],
                  meta={"song": song.title, "theme": theme["name"],
                        "bank": cfg["audio"]["bank"],
                        "seed": cfg["solver"]["seed"]})
@@ -104,17 +111,22 @@ def _render_video(traj, cfg, theme, stem, engine: str, scale: float,
                            progress=progress)
             print()
         elif engine == "blender":
-            _run_blender(traj, cfg, theme, Path(td), silent)
+            _run_blender(traj, cfg, theme, Path(td), silent, scale=scale)
         else:
             raise SystemExit(f"unknown engine '{engine}'")
         return mux(silent, wav, out_path)
 
 
-def _run_blender(traj, cfg, theme, tmpdir: Path, out_mp4: Path) -> None:
+def _run_blender(traj, cfg, theme, tmpdir: Path, out_mp4: Path,
+                 scale: float = 1.0) -> None:
+    import importlib.util
+
     blender = os.environ.get("BLENDER") or shutil.which("blender")
-    if not blender:
+    has_bpy = importlib.util.find_spec("bpy") is not None
+    if not blender and not has_bpy:
         raise SystemExit(
-            "Blender not found on PATH (set $BLENDER or install it).\n"
+            "Blender not found: install Blender (set $BLENDER if off PATH) "
+            "or `pip install bpy`.\n"
             "Tip: `marblegen render --engine preview` renders without Blender.")
     from marblegen.palette import instrument_length, pitch_color
 
@@ -135,11 +147,29 @@ def _run_blender(traj, cfg, theme, tmpdir: Path, out_mp4: Path) -> None:
         json.dump({"theme": theme, "render": cfg["render"],
                    "instrument_visuals": visuals}, f)
     script = REPO_ROOT / "marblegen" / "blender" / "build_scene.py"
-    cmd = [blender, "--background", "--factory-startup", "--python", str(script),
-           "--", "--traj", str(traj_json), "--scene", str(scene_cfg),
-           "--out", str(out_mp4)]
+    script_args = ["--traj", str(traj_json), "--scene", str(scene_cfg),
+                   "--out", str(out_mp4), "--scale", str(scale)]
+    if blender:
+        cmd = [blender, "--background", "--factory-startup",
+               "--python", str(script), "--", *script_args]
+    else:  # bpy python module
+        cmd = [sys.executable, str(script), *script_args]
     print("  running:", " ".join(cmd))
     subprocess.run(cmd, check=True)
+
+    if not out_mp4.exists():
+        # bpy wheel without ffmpeg output rendered a PNG sequence instead
+        frames_dir = Path(str(out_mp4) + "_frames")
+        if not frames_dir.exists():
+            raise SystemExit("Blender produced neither a video nor frames")
+        from marblegen.ffmpeg import ffmpeg_exe
+        fps = int(cfg["render"]["fps"])
+        subprocess.run([ffmpeg_exe(), "-y", "-loglevel", "error",
+                        "-framerate", str(fps),
+                        "-i", str(frames_dir / "%04d.png"),
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-crf", "19", "-preset", "medium",
+                        str(out_mp4)], check=True)
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +233,8 @@ def _job_namespace(job: dict, args) -> argparse.Namespace:
         transpose=int(job.get("transpose", 0)),
         tempo_scale=float(job.get("tempo_scale", 1.0)),
         trim=job.get("trim"), loop=int(job.get("loop", 1)),
-        track=job.get("track"), force=bool(job.get("force", False)),
+        track=job.get("track"), marbles=job.get("marbles", "auto"),
+        force=bool(job.get("force", False)),
         engine=job.get("engine", args.engine), scale=float(job.get("scale", args.scale)),
         out=job.get("out"))
 
@@ -222,11 +253,14 @@ def cmd_validate(args):
             midi_path, manifest = resolve_song(stem)
             song = load_midi(midi_path)
             hits = to_hits(song, cfg["solver"]["chord_epsilon"])
-            traj = solve(hits, cfg["solver"], meta={"song": stem})
+            n_marbles = manifest.get("marbles") or auto_marbles(hits)
+            traj = solve(split_voices(hits, int(n_marbles)), cfg["solver"],
+                         meta={"song": stem})
             rep = validate(traj, hits, cfg["solver"])
             s = rep["stats"]
             print(f"{'PASS' if rep['ok'] else 'FAIL'} "
-                  f"{stem:28s} {theme_name:18s} notes={s['notes']:3d} "
+                  f"{stem:28s} {theme_name:18s} m={s['marbles']} "
+                  f"notes={s['notes']:3d} "
                   f"pegs={s['pegs']:3d} rev={s['reversals']:2d} "
                   f"speeds {s['speed_min']}-{s['speed_max']} m/s "
                   f"warn={len(rep['warnings'])}")
@@ -274,6 +308,9 @@ def _add_song_flags(sp, engine_default: str, scale_default: float):
     sp.add_argument("--trim", help="time range in seconds, e.g. 0:30")
     sp.add_argument("--loop", type=int, default=1, help="repeat melody N times")
     sp.add_argument("--track", type=int, help="MIDI track override")
+    sp.add_argument("--marbles", default="auto",
+                    help="marble count: a number or 'auto' (default; dense "
+                         "songs split across 2-3 marbles)")
     sp.add_argument("--force", action="store_true",
                     help="render even if validation fails")
     sp.add_argument("--engine", default=engine_default,

@@ -1,12 +1,13 @@
 """Trajectory data model.
 
-A solved video is a sequence of analytic motion segments plus a list of hit
-events. Physics is stored in closed form (parabolas / rolling arcs), so both
-renderers and the validator sample the exact same motion — there is no
-separate "animation" that could drift from the physics.
+A solved video is a set of marble tracks; each track is a sequence of
+analytic motion segments plus contact events. Physics is stored in closed
+form (parabolas / rolling arcs), so both renderers and the validator sample
+the exact same motion — there is no separate "animation" that could drift
+from the physics.
 
 Coordinates: 2D vertical plane. x = horizontal (metres, + right),
-y = vertical (+ up). The marble descends over the song; the camera follows.
+y = vertical (+ up). The marbles descend over the song; the camera follows.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ class Segment:
     # roll-only fields:
     tangent: tuple[float, float] | None = None   # unit vector, down-slope
     accel: float = 0.0                           # signed accel along tangent
+    track: int = 0
 
     def pos(self, t: float) -> np.ndarray:
         tau = t - self.t0
@@ -56,7 +58,7 @@ class Segment:
 @dataclass
 class Event:
     """A contact: an instrument strike, a silent peg, a ramp landing, or the
-    spawn/release of the marble."""
+    spawn/release of a marble."""
     time: float
     kind: str                        # 'spawn'|'note'|'peg'|'roll_land'|'reversal'
     pos: tuple[float, float] = (0.0, 0.0)
@@ -68,6 +70,7 @@ class Event:
     mode: str = "bounce"             # 'bounce' | 'roll' (instrument on a ramp)
     tangent: tuple[float, float] | None = None   # ramp direction for roll hits
     e_used: float | None = None      # restitution actually applied (bounces)
+    track: int = 0
 
 
 @dataclass
@@ -75,13 +78,28 @@ class Trajectory:
     events: list[Event]
     segments: list[Segment]
     meta: dict
+    _by_track: dict = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------------
-    def time_range(self) -> tuple[float, float]:
-        return self.segments[0].t0, self.segments[-1].t1
+    def tracks(self) -> list[int]:
+        return sorted({s.track for s in self.segments})
 
-    def pos_at(self, t: float) -> np.ndarray:
-        segs = self.segments
+    def segments_of(self, track: int) -> list[Segment]:
+        if track not in self._by_track:
+            self._by_track[track] = sorted(
+                (s for s in self.segments if s.track == track),
+                key=lambda s: s.t0)
+        return self._by_track[track]
+
+    def time_range(self) -> tuple[float, float]:
+        return (min(s.t0 for s in self.segments),
+                max(s.t1 for s in self.segments))
+
+    def track_start(self, track: int) -> float:
+        return self.segments_of(track)[0].t0
+
+    def pos_at(self, t: float, track: int = 0) -> np.ndarray:
+        segs = self.segments_of(track)
         if t <= segs[0].t0:
             return segs[0].pos(segs[0].t0)
         for s in segs:
@@ -89,22 +107,25 @@ class Trajectory:
                 return s.pos(t)
         return segs[-1].pos(segs[-1].t1)
 
-    def sample(self, fps: int, t_start: float, t_end: float) -> np.ndarray:
+    def sample(self, fps: int, t_start: float, t_end: float,
+               track: int = 0) -> np.ndarray:
         n = max(2, int(round((t_end - t_start) * fps)) + 1)
         ts = t_start + np.arange(n) / fps
-        return np.array([self.pos_at(t) for t in ts])
+        return np.array([self.pos_at(t, track) for t in ts])
 
     # ------------------------------------------------------------------
     def camera_path(self, fps: int, t_start: float, t_end: float,
                     omega: float = 5.5, zeta: float = 1.0,
                     lead: float = 0.0, view_h: float = 2.3) -> np.ndarray:
-        """Critically damped 2nd-order follow of the ball. Returns [n,2]
-        camera-centre positions. `lead` shifts the target down so the ball sits
-        above centre-frame (lead is a fraction of view height)."""
-        ball = self.sample(fps, t_start, t_end)
-        target = ball.copy()
+        """Critically damped 2nd-order follow of the marble centroid, so every
+        marble stays framed. `lead` shifts the target down so the balls ride
+        above centre-frame."""
+        tracks = self.tracks()
+        balls = np.stack([self.sample(fps, t_start, t_end, tr)
+                          for tr in tracks])          # [n_tracks, n, 2]
+        target = balls.mean(axis=0)
         target[:, 0] *= 0.35              # follow x only gently — keeps frame calm
-        target[:, 1] -= lead * view_h     # ball rides above centre-frame
+        target[:, 1] -= lead * view_h     # balls ride above centre-frame
         cam = np.zeros_like(target)
         cam[0] = target[0]
         vel = np.zeros(2)
@@ -118,13 +139,12 @@ class Trajectory:
     # ------------------------------------------------------------------
     def to_json(self, path: str | Path, render_cfg: dict | None = None) -> None:
         """Export everything a renderer needs (analytic segments + baked
-        samples + camera path) as one JSON file."""
+        per-frame ball/camera samples) as one JSON file."""
         rc = render_cfg or {}
         fps = int(rc.get("fps", 60))
         t0, t1 = self.time_range()
         lead_in = float(rc.get("lead_in_s", 0.9))
         video_t0 = t0 - lead_in
-        ball = self.sample(fps, video_t0, t1)
         cam = self.camera_path(fps, video_t0, t1,
                                omega=float(rc.get("camera_omega", 5.5)),
                                zeta=float(rc.get("camera_zeta", 1.0)),
@@ -146,16 +166,21 @@ class Trajectory:
                 "mode": e.mode,
                 "tangent": [r(e.tangent[0]), r(e.tangent[1])] if e.tangent else None,
                 "e_used": r(e.e_used) if e.e_used is not None else None,
+                "track": e.track,
             } for e in self.events],
             "segments": [{
                 "kind": s.kind, "t0": r(s.t0), "t1": r(s.t1),
                 "p0": [r(s.p0[0]), r(s.p0[1])], "v0": [r(s.v0[0]), r(s.v0[1])],
                 "gravity": r(s.gravity),
                 "tangent": [r(s.tangent[0]), r(s.tangent[1])] if s.tangent else None,
-                "accel": r(s.accel),
+                "accel": r(s.accel), "track": s.track,
             } for s in self.segments],
-            "ball": {"fps": fps, "t0": r(video_t0),
-                     "positions": [[r(p[0]), r(p[1])] for p in ball]},
+            "balls": [{
+                "track": tr, "fps": fps, "t0": r(video_t0),
+                "start": r(self.track_start(tr)),
+                "positions": [[r(p[0]), r(p[1])] for p in
+                              self.sample(fps, video_t0, t1, tr)],
+            } for tr in self.tracks()],
             "camera": {"fps": fps, "t0": r(video_t0),
                        "positions": [[r(p[0]), r(p[1])] for p in cam]},
         }
@@ -173,12 +198,14 @@ class Trajectory:
                         normal=tuple(e["normal"]) if e["normal"] else None,
                         mode=e["mode"],
                         tangent=tuple(e["tangent"]) if e["tangent"] else None,
-                        e_used=e["e_used"]) for e in d["events"]]
+                        e_used=e["e_used"], track=e.get("track", 0))
+                  for e in d["events"]]
         segments = [Segment(kind=s["kind"], t0=s["t0"], t1=s["t1"],
                             p0=tuple(s["p0"]), v0=tuple(s["v0"]),
                             gravity=s["gravity"],
                             tangent=tuple(s["tangent"]) if s["tangent"] else None,
-                            accel=s["accel"]) for s in d["segments"]]
+                            accel=s["accel"], track=s.get("track", 0))
+                    for s in d["segments"]]
         return Trajectory(events=events, segments=segments, meta=d["meta"])
 
 

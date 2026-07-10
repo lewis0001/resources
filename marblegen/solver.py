@@ -14,16 +14,17 @@ The layout is derived FROM the physics, never the other way around:
 Awkward timing is absorbed by physical fallbacks, not by cheating:
 long gaps insert silent bounce pegs; fast runs switch to roll mode (a ramp of
 instruments, tangential acceleration = 5/7 * g * sin(theta) for a solid
-sphere, with the ramp zig-zagging at the play-area edges); chords become one
-wide instrument struck once. The ball leaves a ramp via a normal restitution
-bounce off the last tube's lip, so ramp exits are ordinary, physical bounces.
+sphere, zig-zagging at the play-area edges); chords become one wide
+instrument struck once; and dense songs can be dealt across SEVERAL marbles
+(see notes.split_voices), each solved on its own horizontal lane with shared
+clearance so tracks never overlap.
 
-Solver state machine: we always stand at a *pending contact* (position,
-incoming velocity, timestamp, and what kind of thing was struck). Looking at
-the next planned target tells us the exact flight time; we then search the
+Solver state machine (per track): we always stand at a *pending contact*
+(position, incoming velocity, timestamp, and what kind of thing was struck).
+Looking at the next planned target gives the exact flight time; we search the
 departure direction, emit the pending contact's event with its now-known
-v_out, and advance. Roll runs emit all their events internally and leave
-their final note as the new pending contact.
+v_out, and advance. Roll runs emit their events internally and leave their
+final note as the new pending contact, so ramp exits are ordinary bounces.
 """
 
 from __future__ import annotations
@@ -45,9 +46,10 @@ class SolveError(RuntimeError):
 
 @dataclass
 class _Ctx:
-    cfg: dict
+    cfg: dict                        # per-track config (lane bounds, centre)
     rng: np.random.Generator
-    # placed instruments: (position, mode) where mode is 'bounce' | 'roll'
+    track: int = 0
+    # placed instruments across ALL tracks: (position, mode)
     instruments: list[tuple[np.ndarray, str]] = field(default_factory=list)
     prev_dx_sign: float = 0.0
     warnings: list[str] = field(default_factory=list)
@@ -173,6 +175,8 @@ def _bounce_step(ctx: _Ctx, p: np.ndarray, v_in: np.ndarray, dt: float,
     e_nom = float(cfg["restitution"])
     e_min = float(cfg["restitution_min"])
     x_lo, x_hi = cfg["x_bounds"]
+    xc = float(cfg.get("x_center", 0.5 * (x_lo + x_hi)))
+    half_w = 0.5 * (x_hi - x_lo)
     speed_in = float(np.linalg.norm(v_in))
     jitter = ctx.rng.normal(0.0, 1.0, size=2048)
 
@@ -208,14 +212,14 @@ def _bounce_step(ctx: _Ctx, p: np.ndarray, v_in: np.ndarray, dt: float,
                     continue
                 # --- scoring (lower is better) ---
                 drop = p[1] - p_next[1]
-                x_pull = 0.5 if abs(p[0]) < 0.8 * x_hi else 1.6
+                x_pull = 0.5 if abs(p[0] - xc) < 0.8 * half_w else 1.6
                 dx = p_next[0] - p[0]
                 altern = 0.0
                 if not relaxed and ctx.prev_dx_sign != 0 and dx != 0 and \
                         math.copysign(1, dx) == ctx.prev_dx_sign:
                     altern = 0.25
                 elev = math.degrees(math.asin(max(-1.0, min(1.0, float(d[1])))))
-                score = (0.9 * x_pull * abs(p_next[0])
+                score = (0.9 * x_pull * abs(p_next[0] - xc)
                          + 1.4 * abs(drop - float(cfg["target_drop_per_hit"]))
                          + altern
                          + 0.004 * abs(elev - 50.0)
@@ -232,7 +236,7 @@ def _bounce_step(ctx: _Ctx, p: np.ndarray, v_in: np.ndarray, dt: float,
     if got is None:
         # Guaranteed-physical last resort: nearly straight up, nudged to centre.
         s_out = e_min * speed_in
-        side = -1.0 if p[0] > 0 else 1.0
+        side = -1.0 if p[0] > xc else 1.0
         d = unit(np.array([0.12 * side, 1.0]))
         v_out = s_out * d
         p_next = p + v_out * dt + 0.5 * G_DOWN * g * dt * dt
@@ -367,12 +371,12 @@ def _solve_run(ctx: _Ctx, p_land: np.ndarray, v_land: np.ndarray, t_land: float,
                             pitches=list(first.pitches), velocity=first.velocity,
                             v_in=tuple(v_land), v_out=tuple(u0 * vt0),
                             normal=normal_for(direction0), mode="roll",
-                            tangent=tuple(u0)))
+                            tangent=tuple(u0), track=ctx.track))
     else:
         events.append(Event(time=t_land, kind="roll_land", pos=tuple(p_land),
                             v_in=tuple(v_land), v_out=tuple(u0 * vt0),
                             normal=normal_for(direction0), mode="roll",
-                            tangent=tuple(u0)))
+                            tangent=tuple(u0), track=ctx.track))
     ctx.add(p_land, "roll")
 
     # --- replay the winning walk: events + roll segments --------------------
@@ -388,12 +392,12 @@ def _solve_run(ctx: _Ctx, p_land: np.ndarray, v_land: np.ndarray, t_land: float,
                 segments.append(Segment(kind="roll", t0=seg_t0, t1=t_rev,
                                         p0=tuple(seg_p0), v0=tuple(seg_v0),
                                         gravity=g, tangent=tuple(seg_u),
-                                        accel=a))
+                                        accel=a, track=ctx.track))
             events.append(Event(time=t_rev, kind="reversal", pos=tuple(p_rev),
                                 v_in=tuple(v_in_rev), v_out=tuple(v_out_rev),
                                 normal=tuple(bounce_normal(v_in_rev, v_out_rev)),
                                 mode="roll", tangent=tuple(u_new),
-                                e_used=e_nom))
+                                e_used=e_nom, track=ctx.track))
             seg_t0, seg_p0, seg_v0, seg_u = t_rev, p_rev, v_out_rev, u_new
         else:
             _, h, pos, v_here, u_here, dd = act
@@ -404,13 +408,14 @@ def _solve_run(ctx: _Ctx, p_land: np.ndarray, v_land: np.ndarray, t_land: float,
                                     velocity=h.velocity,
                                     v_in=tuple(v_here), v_out=tuple(v_here),
                                     normal=normal_for(dd), mode="roll",
-                                    tangent=tuple(u_here)))
+                                    tangent=tuple(u_here), track=ctx.track))
             ctx.add(pos, "roll")
             final_pos, final_v, final_t = pos, v_here, h.time
             final_u, final_dd = u_here, dd
     segments.append(Segment(kind="roll", t0=seg_t0, t1=final_t,
                             p0=tuple(seg_p0), v0=tuple(seg_v0),
-                            gravity=g, tangent=tuple(seg_u), accel=a))
+                            gravity=g, tangent=tuple(seg_u), accel=a,
+                            track=ctx.track))
     pend = _Pending(hit=remaining[-1], kind="note", mode="roll",
                     tangent=tuple(final_u), ramp_normal=normal_for(final_dd))
     return pend, final_pos, final_v, final_t
@@ -420,27 +425,71 @@ def _solve_run(ctx: _Ctx, p_land: np.ndarray, v_land: np.ndarray, t_land: float,
 # Main solve
 # ---------------------------------------------------------------------------
 
-def solve(hits: list[Hit], cfg_solver: dict, meta: dict | None = None) -> Trajectory:
-    if not hits:
+def solve(voices: list[list[Hit]] | list[Hit], cfg_solver: dict,
+          meta: dict | None = None) -> Trajectory:
+    """Solve one or more marble tracks. `voices` is a list of hit lists (one
+    per marble) — pass [hits] for a single marble. Tracks are solved
+    sequentially on horizontal lanes sharing one clearance context, so
+    instruments never interpenetrate across tracks."""
+    if voices and isinstance(voices[0], Hit):
+        voices = [voices]
+    voices = [v for v in voices if v]
+    if not voices:
         raise SolveError("song has no notes")
-    cfg = cfg_solver
-    g = float(cfg["gravity"])
-    ctx = _Ctx(cfg=cfg, rng=np.random.default_rng(int(cfg["seed"])))
 
-    plan = _build_plan(hits, cfg)
+    cfg = cfg_solver
+    ctx = _Ctx(cfg=cfg, rng=np.random.default_rng(int(cfg["seed"])))
     events: list[Event] = []
     segments: list[Segment] = []
+
+    x_lo, x_hi = cfg["x_bounds"]
+    n = len(voices)
+    lane_w = (x_hi - x_lo) / n
+    margin = 0.06 if n > 1 else 0.0
+    for i, hits in enumerate(voices):
+        lane_lo = x_lo + i * lane_w - (margin if i > 0 else 0.0)
+        lane_hi = x_lo + (i + 1) * lane_w + (margin if i < n - 1 else 0.0)
+        cfg_i = dict(cfg)
+        cfg_i["x_bounds"] = [lane_lo, lane_hi]
+        cfg_i["x_center"] = x_lo + (i + 0.5) * lane_w
+        ctx.cfg = cfg_i
+        ctx.track = i
+        ctx.prev_dx_sign = 0.0
+        _solve_track(hits, cfg_i, ctx, events, segments)
+
+    events.sort(key=lambda e: (e.time, e.track))
+    meta = dict(meta or {})
+    meta.update({
+        "solver": {k: cfg[k] for k in ("gravity", "restitution",
+                                       "restitution_min", "seed",
+                                       "impact_speed0")},
+        "n_marbles": n,
+        "n_notes": sum(1 for e in events if e.kind == "note"),
+        "n_pegs": sum(1 for e in events if e.kind == "peg"),
+        "n_reversals": sum(1 for e in events if e.kind == "reversal"),
+        "warnings": ctx.warnings,
+    })
+    return Trajectory(events=events, segments=segments, meta=meta)
+
+
+def _solve_track(hits: list[Hit], cfg: dict, ctx: _Ctx,
+                 events: list[Event], segments: list[Segment]) -> None:
+    g = float(cfg["gravity"])
+    xc = float(cfg["x_center"])
+    plan = _build_plan(hits, cfg)
 
     # ---- initial free-fall onto the first contact -----------------------
     v0 = float(cfg["impact_speed0"])
     t_first = _step_start_time(plan[0])
     h0 = v0 * v0 / (2.0 * g)
     spawn_t = t_first - v0 / g
-    events.append(Event(time=spawn_t, kind="spawn", pos=(0.0, h0),
-                        v_in=(0.0, 0.0), v_out=(0.0, 0.0), mode="bounce"))
+    events.append(Event(time=spawn_t, kind="spawn", pos=(xc, h0),
+                        v_in=(0.0, 0.0), v_out=(0.0, 0.0), mode="bounce",
+                        track=ctx.track))
     segments.append(Segment(kind="air", t0=spawn_t, t1=t_first,
-                            p0=(0.0, h0), v0=(0.0, 0.0), gravity=g))
-    p = np.array([0.0, 0.0])
+                            p0=(xc, h0), v0=(0.0, 0.0), gravity=g,
+                            track=ctx.track))
+    p = np.array([xc, 0.0])
     v_in = np.array([0.0, -v0])
     t = t_first
 
@@ -465,7 +514,8 @@ def solve(hits: list[Hit], cfg_solver: dict, meta: dict | None = None) -> Trajec
                                                          idx, next_mode="roll")
             _emit_pending(ctx, events, pending, t, p, v_in, v_out, e_used)
             segments.append(Segment(kind="air", t0=t, t1=t + dt_air,
-                                    p0=tuple(p), v0=tuple(v_out), gravity=g))
+                                    p0=tuple(p), v0=tuple(v_out), gravity=g,
+                                    track=ctx.track))
             pending, p, v_in, t = _solve_run(ctx, p_land, v_land, t + dt_air,
                                              nxt["hits"], events, segments)
         else:
@@ -474,7 +524,8 @@ def solve(hits: list[Hit], cfg_solver: dict, meta: dict | None = None) -> Trajec
             v_out, p_next, v_next, e_used = _bounce_step(ctx, p, v_in, dt, idx)
             _emit_pending(ctx, events, pending, t, p, v_in, v_out, e_used)
             segments.append(Segment(kind="air", t0=t, t1=t_next,
-                                    p0=tuple(p), v0=tuple(v_out), gravity=g))
+                                    p0=tuple(p), v0=tuple(v_out), gravity=g,
+                                    track=ctx.track))
             pending = _Pending(hit=nxt.get("hit"),
                                kind="note" if nxt["kind"] == "note" else "peg",
                                mode="bounce")
@@ -483,23 +534,12 @@ def solve(hits: list[Hit], cfg_solver: dict, meta: dict | None = None) -> Trajec
     # ---- final contact + flourish tail -----------------------------------
     e_nom = float(cfg["restitution"])
     s_out = e_nom * float(np.linalg.norm(v_in))
-    side = -1.0 if p[0] > 0 else 1.0
+    side = -1.0 if p[0] > xc else 1.0
     v_out = s_out * unit(np.array([0.35 * side, 1.0]))
     _emit_pending(ctx, events, pending, t, p, v_in, v_out, e_nom)
     segments.append(Segment(kind="air", t0=t, t1=t + 1.6,
-                            p0=tuple(p), v0=tuple(v_out), gravity=g))
-
-    meta = dict(meta or {})
-    meta.update({
-        "solver": {k: cfg[k] for k in ("gravity", "restitution",
-                                       "restitution_min", "seed",
-                                       "impact_speed0")},
-        "n_notes": sum(1 for e in events if e.kind == "note"),
-        "n_pegs": sum(1 for e in events if e.kind == "peg"),
-        "n_reversals": sum(1 for e in events if e.kind == "reversal"),
-        "warnings": ctx.warnings,
-    })
-    return Trajectory(events=events, segments=segments, meta=meta)
+                            p0=tuple(p), v0=tuple(v_out), gravity=g,
+                            track=ctx.track))
 
 
 def _emit_pending(ctx: _Ctx, events: list[Event], pending: _Pending, t: float,
@@ -514,7 +554,7 @@ def _emit_pending(ctx: _Ctx, events: list[Event], pending: _Pending, t: float,
         normal=tuple(bounce_normal(v_in, v_out)),
         mode=pending.mode,
         tangent=pending.tangent,
-        e_used=float(e_used)))
+        e_used=float(e_used), track=ctx.track))
     if pending.mode == "bounce":
         ctx.add(p, "bounce")
     # roll-mode pending contacts were already registered by _solve_run

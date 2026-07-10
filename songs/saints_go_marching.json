@@ -1,0 +1,11 @@
+{
+  "title": "When the Saints Go Marching In",
+  "composer": "Traditional (American)",
+  "license": "public domain",
+  "bpm": 132,
+  "note_count": 32,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "boomwhacker"
+  }
+}

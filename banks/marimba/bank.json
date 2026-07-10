@@ -1,0 +1,10 @@
+{
+  "name": "marimba",
+  "description": "Warm wooden bars, strong 4th partial",
+  "synth": {
+    "partials": [[1.0, 1.0, 1.0], [3.98, 0.42, 0.3], [9.2, 0.1, 0.12]],
+    "decay_s": 0.9, "attack_ms": 1.2,
+    "strike_noise": 0.18, "strike_tone_hz": 2400,
+    "note_dur_s": 2.0
+  }
+}

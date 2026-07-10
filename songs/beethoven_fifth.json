@@ -1,0 +1,11 @@
+{
+  "title": "Symphony No. 5 (opening)",
+  "composer": "Ludwig van Beethoven",
+  "license": "public domain",
+  "bpm": 108,
+  "note_count": 20,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "marimba"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Lullaby (Wiegenlied)",
+  "composer": "Johannes Brahms",
+  "license": "public domain",
+  "bpm": 104,
+  "note_count": 27,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "music_box"
+  }
+}

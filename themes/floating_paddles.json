@@ -1,0 +1,19 @@
+{
+  "name": "floating_paddles",
+  "description": "Kalimba-like colored paddles on thin posts floating in a bright void; the marble bounces between them.",
+  "style": {
+    "instrument": "paddle",
+    "background": "#f2f1ee",
+    "background_grid": null,
+    "bracket_color": "#8d939a",
+    "peg_color": "#c4c8cd",
+    "ball_color": "#f3d9d0",
+    "ball_radius_m": 0.034,
+    "paddle_thickness_m": 0.028,
+    "wobble_deg": 14.0,
+    "wobble_decay_s": 0.32
+  },
+  "audio": { "bank": "kalimba" },
+  "solver": { "target_drop_per_hit": 0.26, "min_air_dt": 0.16 },
+  "palette": "pastel"
+}

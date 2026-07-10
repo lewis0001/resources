@@ -1,0 +1,10 @@
+{
+  "name": "glass",
+  "description": "Struck glass - pure, ringing, slightly detuned shimmer",
+  "synth": {
+    "partials": [[1.0, 1.0, 1.0], [2.32, 0.4, 0.7], [4.25, 0.2, 0.4], [6.63, 0.1, 0.2]],
+    "decay_s": 2.4, "attack_ms": 0.8, "inharmonic": 0.6,
+    "strike_noise": 0.12, "strike_tone_hz": 6000,
+    "note_dur_s": 3.2
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Row, Row, Row Your Boat",
+  "composer": "Traditional (American)",
+  "license": "public domain",
+  "bpm": 100,
+  "note_count": 27,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "kalimba"
+  }
+}

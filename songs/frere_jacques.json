@@ -1,0 +1,11 @@
+{
+  "title": "Fr\u00e8re Jacques",
+  "composer": "Traditional (French)",
+  "license": "public domain",
+  "bpm": 112,
+  "note_count": 32,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "kalimba"
+  }
+}

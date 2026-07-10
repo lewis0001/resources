@@ -1,0 +1,11 @@
+{
+  "title": "Happy Birthday to You",
+  "composer": "Patty & Mildred Hill (PD since 2016)",
+  "license": "public domain",
+  "bpm": 120,
+  "note_count": 25,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "kalimba"
+  }
+}

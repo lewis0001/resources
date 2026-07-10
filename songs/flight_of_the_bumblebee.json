@@ -1,0 +1,11 @@
+{
+  "title": "Flight of the Bumblebee",
+  "composer": "Nikolai Rimsky-Korsakov",
+  "license": "public domain",
+  "bpm": 112,
+  "note_count": 49,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

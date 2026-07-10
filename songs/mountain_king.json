@@ -1,0 +1,11 @@
+{
+  "title": "In the Hall of the Mountain King",
+  "composer": "Edvard Grieg",
+  "license": "public domain",
+  "bpm": 168,
+  "note_count": 52,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

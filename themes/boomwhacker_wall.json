@@ -1,0 +1,20 @@
+{
+  "name": "boomwhacker_wall",
+  "description": "Colored tubes on thin metal brackets against a tiled wall; the marble rolls and bounces down the wall (glissando-friendly).",
+  "style": {
+    "instrument": "tube",
+    "background": "#e9e7e2",
+    "background_grid": "#d8d5cf",
+    "grid_spacing_m": 0.42,
+    "bracket_color": "#9aa0a6",
+    "peg_color": "#b9bec4",
+    "ball_color": "#dfe8f0",
+    "ball_radius_m": 0.032,
+    "tube_radius_m": 0.030,
+    "wobble_deg": 9.0,
+    "wobble_decay_s": 0.30
+  },
+  "audio": { "bank": "boomwhacker" },
+  "solver": { "ramp_angle_deg": [14.0, 40.0] },
+  "palette": "boomwhacker"
+}

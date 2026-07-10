@@ -1,0 +1,11 @@
+{
+  "title": "Korobeiniki (Tetris theme)",
+  "composer": "Traditional (Russian)",
+  "license": "public domain",
+  "bpm": 140,
+  "note_count": 37,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

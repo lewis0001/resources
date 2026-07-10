@@ -1,0 +1,11 @@
+{
+  "title": "Canon in D",
+  "composer": "Johann Pachelbel",
+  "license": "public domain",
+  "bpm": 64,
+  "note_count": 38,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "glass"
+  }
+}

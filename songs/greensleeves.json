@@ -1,0 +1,11 @@
+{
+  "title": "Greensleeves",
+  "composer": "Traditional (English)",
+  "license": "public domain",
+  "bpm": 100,
+  "note_count": 37,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "music_box"
+  }
+}

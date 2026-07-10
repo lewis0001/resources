@@ -1,0 +1,11 @@
+{
+  "title": "Auld Lang Syne",
+  "composer": "Traditional (Scottish)",
+  "license": "public domain",
+  "bpm": 100,
+  "note_count": 30,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "vibraphone"
+  }
+}

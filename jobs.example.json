@@ -1,0 +1,9 @@
+[
+  {"song": "ode_to_joy", "theme": "boomwhacker_wall",
+   "caption": "Songs You've Heard... But Don't Know The Name 🤯"},
+  {"song": "korobeiniki", "theme": "boomwhacker_wall", "bank": "marimba"},
+  {"song": "fur_elise", "theme": "floating_paddles", "bank": "music_box"},
+  {"song": "mountain_king", "theme": "boomwhacker_wall", "seed": 3},
+  {"song": "canon_in_d", "theme": "floating_paddles", "bank": "glass",
+   "trim": "0:30"}
+]

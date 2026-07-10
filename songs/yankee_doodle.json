@@ -1,0 +1,11 @@
+{
+  "title": "Yankee Doodle",
+  "composer": "Traditional (American)",
+  "license": "public domain",
+  "bpm": 120,
+  "note_count": 28,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "boomwhacker"
+  }
+}

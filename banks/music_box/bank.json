@@ -1,0 +1,10 @@
+{
+  "name": "music_box",
+  "description": "Bright plucked comb teeth, bell-like",
+  "synth": {
+    "partials": [[1.0, 1.0, 1.0], [3.4, 0.3, 0.45], [7.7, 0.18, 0.25], [13.1, 0.07, 0.1]],
+    "decay_s": 1.8, "attack_ms": 1.0, "inharmonic": 0.35,
+    "strike_noise": 0.06, "strike_tone_hz": 5200,
+    "note_dur_s": 2.8
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Oh! Susanna",
+  "composer": "Stephen Foster",
+  "license": "public domain",
+  "bpm": 126,
+  "note_count": 55,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "boomwhacker"
+  }
+}

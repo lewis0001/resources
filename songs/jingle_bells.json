@@ -1,0 +1,11 @@
+{
+  "title": "Jingle Bells",
+  "composer": "James Lord Pierpont",
+  "license": "public domain",
+  "bpm": 132,
+  "note_count": 51,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "boomwhacker"
+  }
+}

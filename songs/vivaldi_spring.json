@@ -1,0 +1,11 @@
+{
+  "title": "Spring (The Four Seasons)",
+  "composer": "Antonio Vivaldi",
+  "license": "public domain",
+  "bpm": 112,
+  "note_count": 26,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "vibraphone"
+  }
+}

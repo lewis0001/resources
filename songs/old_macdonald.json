@@ -1,0 +1,11 @@
+{
+  "title": "Old MacDonald Had a Farm",
+  "composer": "Traditional (American)",
+  "license": "public domain",
+  "bpm": 116,
+  "note_count": 25,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

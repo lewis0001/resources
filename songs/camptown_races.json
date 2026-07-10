@@ -1,0 +1,11 @@
+{
+  "title": "Camptown Races",
+  "composer": "Stephen Foster",
+  "license": "public domain",
+  "bpm": 120,
+  "note_count": 35,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "boomwhacker",
+  "description": "Hollow plastic tube percussion - punchy, airy, short",
+  "synth": {
+    "partials": [[1.0, 1.0, 1.0], [2.76, 0.35, 0.35], [5.4, 0.12, 0.18], [8.9, 0.05, 0.1]],
+    "decay_s": 0.55, "attack_ms": 1.0,
+    "strike_noise": 0.35, "strike_tone_hz": 1800,
+    "note_dur_s": 1.6
+  }
+}

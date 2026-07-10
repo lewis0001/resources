@@ -1,0 +1,11 @@
+{
+  "title": "Minuet in G major",
+  "composer": "Christian Petzold",
+  "license": "public domain",
+  "bpm": 116,
+  "note_count": 33,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "glass"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Twinkle Twinkle Little Star",
+  "composer": "Traditional (French)",
+  "license": "public domain",
+  "bpm": 104,
+  "note_count": 42,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "music_box"
+  }
+}

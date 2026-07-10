@@ -1,0 +1,11 @@
+{
+  "title": "Mary Had a Little Lamb",
+  "composer": "Traditional (American)",
+  "license": "public domain",
+  "bpm": 116,
+  "note_count": 26,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

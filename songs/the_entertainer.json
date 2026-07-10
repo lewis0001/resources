@@ -1,0 +1,11 @@
+{
+  "title": "The Entertainer",
+  "composer": "Scott Joplin",
+  "license": "public domain",
+  "bpm": 96,
+  "note_count": 36,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "marimba"
+  }
+}

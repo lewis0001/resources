@@ -1,0 +1,11 @@
+{
+  "title": "Scarborough Fair",
+  "composer": "Traditional (English)",
+  "license": "public domain",
+  "bpm": 96,
+  "note_count": 28,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "glass"
+  }
+}

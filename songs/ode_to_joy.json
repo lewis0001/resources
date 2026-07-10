@@ -1,0 +1,11 @@
+{
+  "title": "Ode to Joy",
+  "composer": "Ludwig van Beethoven",
+  "license": "public domain",
+  "bpm": 120,
+  "note_count": 62,
+  "suggested": {
+    "theme": "boomwhacker_wall",
+    "bank": "boomwhacker"
+  }
+}

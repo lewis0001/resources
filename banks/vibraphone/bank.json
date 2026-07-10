@@ -1,0 +1,11 @@
+{
+  "name": "vibraphone",
+  "description": "Metal bars with motor tremolo, long sustain",
+  "synth": {
+    "partials": [[1.0, 1.0, 1.0], [4.0, 0.3, 0.5], [10.0, 0.08, 0.2]],
+    "decay_s": 2.8, "attack_ms": 1.5,
+    "tremolo_hz": 5.5, "tremolo_depth": 0.35,
+    "strike_noise": 0.08, "strike_tone_hz": 3000,
+    "note_dur_s": 3.5
+  }
+}

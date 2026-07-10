@@ -1,0 +1,11 @@
+{
+  "title": "Amazing Grace",
+  "composer": "Traditional (American)",
+  "license": "public domain",
+  "bpm": 90,
+  "note_count": 35,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "glass"
+  }
+}

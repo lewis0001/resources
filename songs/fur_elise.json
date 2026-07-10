@@ -1,0 +1,11 @@
+{
+  "title": "F\u00fcr Elise",
+  "composer": "Ludwig van Beethoven",
+  "license": "public domain",
+  "bpm": 112,
+  "note_count": 35,
+  "suggested": {
+    "theme": "floating_paddles",
+    "bank": "music_box"
+  }
+}
